@@ -1,8 +1,0 @@
-[package]
-name = "rarg"
-version = "0.1.0"
-authors = ["Adam Lesinski <adamlesinski@gmail.com>"]
-edition = "2018"
-
-[dependencies]
-rarg_derive = { path = "../rarg_derive" }
