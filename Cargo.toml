@@ -1,0 +1,2 @@
+[workspace]
+members = ["rarg", "rarg_derive", "example"]
