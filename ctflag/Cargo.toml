@@ -3,11 +3,8 @@ name = "ctflag"
 version = "0.1.0"
 authors = ["Adam Lesinski <adamlesinski@gmail.com>"]
 edition = "2018"
+repository = "https://github.com/adamlesinski/ctflag"
 
 [dependencies.ctflag_derive]
 version = "0.1.0"
 path = "../ctflag_derive"
-
-[[example]]
-name = "simple"
-path = "../examples/simple.rs"

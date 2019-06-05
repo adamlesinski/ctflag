@@ -3,6 +3,7 @@ name = "ctflag_derive"
 version = "0.1.0"
 authors = ["Adam Lesinski <adamlesinski@gmail.com>"]
 edition = "2018"
+repository = "https://github.com/adamlesinski/ctflag"
 
 [lib]
 proc-macro = true
