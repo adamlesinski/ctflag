@@ -68,10 +68,11 @@ pub fn flag_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             let expanded = quote! {
                 impl ctflag::Flags for #name {
                     fn from_args(args: std::env::Args) -> ctflag::Result<(Self, Vec<String>)> {
-                        let mut rest_args = Vec::<String>::new();
                         #(#temp_vars)*
+                        let mut rest_args = Vec::<String>::new();
                         let mut args_iter = args.into_iter();
-                        args_iter.next();
+                        // Skip the first arg (program name) and pass it through.
+                        args_iter.next().map(|arg| rest_args.push(arg));
                         for arg in args_iter {
                             if !arg.starts_with("-") {
                                 rest_args.push(arg);
