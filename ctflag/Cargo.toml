@@ -6,6 +6,9 @@ edition = "2018"
 license = "MIT OR Apache-2.0"
 description = "Command-line flag parsing library"
 repository = "https://github.com/adamlesinski/ctflag"
+categories = ["command-line-interface"]
+keywords = ["flag", "parse", "parsing", "argument", "arg"]
+readme = "README.md"
 
 [dependencies.ctflag_derive]
 version = "0.1.0"
