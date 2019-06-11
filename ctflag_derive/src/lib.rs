@@ -1,4 +1,4 @@
-#![recursion_limit = "128"]
+#![recursion_limit = "256"]
 
 extern crate proc_macro;
 
@@ -67,32 +67,31 @@ pub fn flag_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             let description = generate_description(&flags);
             let expanded = quote! {
                 impl ctflag::Flags for #name {
-                    fn from_args(args: std::env::Args) -> ctflag::Result<(Self, Vec<String>)> {
+                    fn from_args<T>(args: T) -> ctflag::Result<(Self, Vec<String>)>
+                    where T: IntoIterator<Item = String> {
                         #(#temp_vars)*
                         let mut rest_args = Vec::<String>::new();
-                        let mut args_iter = args.into_iter();
                         // Skip the first arg (program name) and pass it through.
-                        args_iter.next().map(|arg| rest_args.push(arg));
-                        for arg in args_iter {
-                            if !arg.starts_with("-") {
-                                rest_args.push(arg);
-                                continue;
-                            }
-                            let mut arg_name = arg.as_ref();
-                            let mut arg_value = None;
-                            if let Some(idx) = arg.find('=') {
-                                arg_name = &arg[0..idx];
-                                arg_value = Some(&arg[idx + 1..arg.len()]);
-                            }
-                            match arg_name {
-                                #(#field_parsing ,)*
-                                _ => {
-                                    Err(ctflag::FlagError::UnrecognizedArg(
-                                        String::from(arg_name)))?;
+                        let mut args = args.into_iter();
+                        args.next().map(|arg| rest_args.push(arg));
+                        let mut iter = ctflag::internal::FlagIterator::from_args(args);
+                        while let Some(arg) = iter.next() {
+                            use ctflag::internal::Arg;
+                            match arg {
+                                Arg::Arg(arg) => rest_args.push(arg),
+                                Arg::Flag(flag) => {
+                                    let arg_name = flag.key;
+                                    let arg_value = flag.val;
+                                    match arg_name.as_str() {
+                                        #(#field_parsing ,)*
+                                        _ => {
+                                            Err(ctflag::FlagError::UnrecognizedArg(
+                                                arg_name))?;
+                                        }
+                                    }
                                 }
                             }
                         }
-
                         Ok((#name {
                             #(#field_assign),*
                         }, rest_args))
@@ -321,6 +320,10 @@ fn extract_flag_attrs(meta: &syn::Meta) -> syn::Result<Attrs> {
                     == syn::Ident::new("default", Span::call_site())
                 {
                     attrs.default_value = Some(name_val.lit.clone());
+                } else if name_val.ident
+                    == syn::Ident::new("short", Span::call_site())
+                {
+
                 } else {
                     return Err(syn::Error::new_spanned(
                         &name_val.ident,
@@ -375,37 +378,39 @@ fn generate_field_parsing(flag: &Flag) -> TokenStream {
     let parse_expr = match &flag.flag_type {
         FlagType::Bool => {
             quote_spanned! {name.span()=>
-                ctflag::bool_from_arg(arg_value)
-                           .map_err(|err| ctflag::FlagError::ParseError(
-                               ctflag::ParseErrorStruct {
-                                   type_str: "bool",
-                                   input: String::from(arg_value.unwrap()),
-                                   src: err,
-                               }
-                           ))?
+                ctflag::internal::bool_from_arg(arg_value.as_ref().map(|s| s.as_str()))
+                    .map_err(|err| ctflag::FlagError::ParseError(
+                        ctflag::ParseErrorStruct {
+                            type_str: "bool",
+                            input: arg_value.unwrap(),
+                            src: err,
+                        }
+                    ))?
             }
         }
         FlagType::Option => quote_spanned! {name.span()=> {
-            let input = arg_value.ok_or(ctflag::FlagError::MissingValue(
-                String::from(#name_lit)))?;
-            ctflag::option_from_arg(input)
+            let input = arg_value
+                .or_else(|| iter.next_arg())
+                .ok_or(ctflag::FlagError::MissingValue(String::from(#name_lit)))?;
+            ctflag::internal::option_from_arg(&input)
                 .map_err(|err| ctflag::FlagError::ParseError(
                     ctflag::ParseErrorStruct {
                         type_str: stringify!(#ty),
-                        input: String::from(input),
+                        input: input,
                         src: err,
                     }
                 ))?
             }
         },
         _ => quote_spanned! {name.span()=> {
-            let input = arg_value.ok_or(ctflag::FlagError::MissingValue(
-                String::from(#name_lit)))?;
-            ctflag::FromArg::from_arg(input)
+            let input = arg_value
+                .or_else(|| iter.next_arg())
+                .ok_or(ctflag::FlagError::MissingValue(String::from(#name_lit)))?;
+            ctflag::FromArg::from_arg(&input)
                 .map_err(|err| ctflag::FlagError::ParseError(
                     ctflag::ParseErrorStruct {
                         type_str: stringify!(#ty),
-                        input: String::from(input),
+                        input: input,
                         src: err,
                     }
                 ))?

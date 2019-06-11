@@ -111,12 +111,22 @@
 //! [`ctflag::FromArg`]: trait.FromArg.html
 //! [`ctflag::Flags::description()`]: trait.Flags.html#tymethod.description
 
-use std::env;
 use std::fmt;
 use std::str::FromStr;
 
+// Define the required shared macros first. Definition order is
+// important for macros.
+#[macro_use]
+mod macros;
+
+// Users of this library shouldn't need to know that the derive functionality
+// is in a different crate.
 #[doc(hidden)]
 pub use ctflag_derive::*;
+
+// Public so that generated code outside of the crate can make use of it.
+#[doc(hidden)]
+pub mod internal;
 
 #[derive(Clone, Debug)]
 pub enum FlagError {
@@ -185,7 +195,9 @@ pub trait Flags: Sized {
     /// # Ok(())
     /// # }
     /// ```
-    fn from_args(args: env::Args) -> Result<(Self, Vec<String>)>;
+    fn from_args<T>(args: T) -> Result<(Self, Vec<String>)>
+    where
+        T: IntoIterator<Item = String>;
 
     /// Returns a String that describes the flags defined in the struct
     /// implementing this trait.
@@ -263,19 +275,6 @@ pub trait FromArg: Sized {
     fn from_arg(value: &str) -> FromArgResult<Self>;
 }
 
-#[doc(hidden)]
-pub fn bool_from_arg(s: Option<&str>) -> FromArgResult<bool> {
-    match s {
-        Some(s) => s.parse::<bool>().map_err(|_| FromArgError::new()),
-        None => Ok(true),
-    }
-}
-
-#[doc(hidden)]
-pub fn option_from_arg<T: FromArg>(s: &str) -> FromArgResult<Option<T>> {
-    <T as FromArg>::from_arg(s).map(Some)
-}
-
 impl<T> FromArg for T
 where
     T: FromStr,
@@ -321,5 +320,229 @@ impl FromArgError {
         FromArgError {
             msg: Some(format!("{}", msg)),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    // Since we are inside the ctflag crate, alias crate to ctflag.
+    use crate as ctflag;
+
+    #[derive(Flags)]
+    struct Simple {
+        one: String,
+        two: Option<String>,
+        three: bool,
+        four: Option<bool>,
+        five: i32,
+        six: Option<i32>,
+        seven: CustomType,
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct CustomType(&'static str);
+
+    impl ctflag::FromArg for CustomType {
+        fn from_arg(value: &str) -> ctflag::FromArgResult<Self> {
+            match value {
+                "foo" => Ok(CustomType("foo")),
+                _ => {
+                    Err(ctflag::FromArgError::with_message("expected \"foo\""))
+                }
+            }
+        }
+    }
+
+    impl Default for CustomType {
+        fn default() -> Self {
+            CustomType("default")
+        }
+    }
+
+    #[test]
+    fn test_defaults() {
+        let args = vec![String::from("prog_name")];
+        let (flags, rest) = Simple::from_args(args).unwrap();
+        assert_eq!(flags.one, "");
+        assert_eq!(flags.two, None);
+        assert_eq!(flags.three, false);
+        assert_eq!(flags.four, None);
+        assert_eq!(flags.five, 0);
+        assert_eq!(flags.six, None);
+        assert_eq!(flags.seven, CustomType("default"));
+        assert_eq!(rest.len(), 1);
+        assert_eq!(rest[0], "prog_name");
+    }
+
+    #[test]
+    fn test_using_eq() {
+        let args = vec![String::from("prog_name"), String::from("--one=hello")];
+        let (flags, _rest) = Simple::from_args(args).unwrap();
+        assert_eq!(flags.one, "hello");
+    }
+
+    #[test]
+    fn test_using_space() {
+        let args = vec![
+            String::from("prog_name"),
+            String::from("--one"),
+            String::from("hello"),
+        ];
+        let (flags, _rest) = Simple::from_args(args).unwrap();
+        assert_eq!(flags.one, "hello");
+    }
+
+    #[test]
+    fn test_bool_using_eq() {
+        let args =
+            vec![String::from("prog_name"), String::from("--three=true")];
+        let (flags, _rest) = Simple::from_args(args).unwrap();
+        assert_eq!(flags.three, true);
+    }
+
+    #[test]
+    fn test_bool_using_space() {
+        let args = vec![
+            String::from("prog_name"),
+            String::from("--three"),
+            String::from("false"),
+        ];
+        let (flags, rest) = Simple::from_args(args).unwrap();
+        assert_eq!(flags.three, true);
+        assert_eq!(rest.len(), 2);
+        assert_eq!(rest[1], "false");
+    }
+
+    #[test]
+    fn test_option_using_eq() {
+        let args = vec![String::from("prog_name"), String::from("--two=hello")];
+        let (flags, _rest) = Simple::from_args(args).unwrap();
+        assert_eq!(flags.two, Some(String::from("hello")));
+    }
+
+    #[test]
+    fn test_option_using_space() {
+        let args = vec![
+            String::from("prog_name"),
+            String::from("--two"),
+            String::from("hello"),
+        ];
+        let (flags, _rest) = Simple::from_args(args).unwrap();
+        assert_eq!(flags.two, Some(String::from("hello")));
+    }
+
+    #[test]
+    fn test_custom_type_using_eq() {
+        let args = vec![String::from("prog_name"), String::from("--seven=foo")];
+        let (flags, _rest) = Simple::from_args(args).unwrap();
+        assert_eq!(flags.seven, CustomType("foo"));
+    }
+
+    #[test]
+    fn test_custom_type_using_space() {
+        let args = vec![
+            String::from("prog_name"),
+            String::from("--seven"),
+            String::from("foo"),
+        ];
+        let (flags, _rest) = Simple::from_args(args).unwrap();
+        assert_eq!(flags.seven, CustomType("foo"));
+    }
+
+    #[test]
+    fn test_int() {
+        let args = vec![
+            String::from("prog_name"),
+            String::from("--five=23"),
+            String::from("--six=42"),
+        ];
+        let (flags, _rest) = Simple::from_args(args).unwrap();
+        assert_eq!(flags.five, 23);
+        assert_eq!(flags.six, Some(42));
+    }
+
+    #[test]
+    fn test_missing_value() {
+        let args = vec![String::from("prog_name"), String::from("--one")];
+        assert_matches!(
+            Simple::from_args(args),
+            Err(ctflag::FlagError::MissingValue(_))
+        );
+    }
+
+    #[test]
+    fn test_bad_int() {
+        let args =
+            vec![String::from("prog_name"), String::from("--five=hello")];
+        assert_matches!(
+            Simple::from_args(args),
+            Err(ctflag::FlagError::ParseError(_))
+        );
+    }
+
+    #[test]
+    fn test_bad_bool() {
+        let args = vec![String::from("prog_name"), String::from("--three=yes")];
+        assert_matches!(
+            Simple::from_args(args),
+            Err(ctflag::FlagError::ParseError(_))
+        );
+    }
+
+    #[derive(Flags)]
+    struct DefaultFlags {
+        #[flag(default = 12)]
+        one: i32,
+
+        #[flag(default = "foo")]
+        two: String,
+
+        #[flag(default = "foo")]
+        three: CustomType,
+
+        #[flag(default = "bar")]
+        four: NoDefaultCustomType,
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct NoDefaultCustomType(&'static str);
+
+    impl ctflag::FromArg for NoDefaultCustomType {
+        fn from_arg(value: &str) -> ctflag::FromArgResult<Self> {
+            match value {
+                "bar" => Ok(NoDefaultCustomType("bar")),
+                _ => {
+                    Err(ctflag::FromArgError::with_message("expected \"bar\""))
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_custom_defaults() {
+        let args = vec![String::from("prog_name")];
+        let (flags, _rest) = DefaultFlags::from_args(args).unwrap();
+        assert_eq!(flags.one, 12);
+        assert_eq!(flags.two, "foo");
+        assert_eq!(flags.three, CustomType("foo"));
+        assert_eq!(flags.four, NoDefaultCustomType("bar"));
+    }
+
+    #[allow(dead_code)]
+    #[derive(Flags)]
+    struct Description {
+        #[flag(desc = "Howdy", default = "foo", placeholder = "THING")]
+        one: String,
+
+        #[flag(desc = "Boom", placeholder = "VROOM")]
+        two: Option<i32>,
+    }
+
+    #[test]
+    fn test_description() {
+        let desc: String = Description::description();
+        assert!(desc.contains("--one THING      Howdy (defaults to \"foo\")"));
+        assert!(desc.contains("--two [VROOM]    Boom"));
     }
 }
