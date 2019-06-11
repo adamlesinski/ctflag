@@ -9,7 +9,7 @@ struct MyFlags {
     #[flag(placeholder = "ADDRESS")]
     opt_address: Option<String>,
 
-    #[flag(default = "1.2.3.4")]
+    #[flag(short = 'a', default = "1.2.3.4")]
     address: String,
 
     #[flag(placeholder = "INTEGER", desc = "A good number.", default = 34)]

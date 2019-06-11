@@ -531,6 +531,20 @@ mod tests {
 
     #[allow(dead_code)]
     #[derive(Flags)]
+    struct BadDefault {
+        #[flag(default = "bad")]
+        one: CustomType,
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_bad_default() {
+        let args = vec![String::from("prog_name")];
+        let _result = BadDefault::from_args(args);
+    }
+
+    #[allow(dead_code)]
+    #[derive(Flags)]
     struct Description {
         #[flag(desc = "Howdy", default = "foo", placeholder = "THING")]
         one: String,
@@ -544,5 +558,29 @@ mod tests {
         let desc: String = Description::description();
         assert!(desc.contains("--one THING      Howdy (defaults to \"foo\")"));
         assert!(desc.contains("--two [VROOM]    Boom"));
+    }
+
+    #[derive(Flags)]
+    struct ShortFlag {
+        #[flag(short = 'o')]
+        output: String,
+    }
+
+    #[test]
+    fn test_short_name_using_eq() {
+        let args = vec![String::from("prog_name"), String::from("-o=file")];
+        let (flags, _rest) = ShortFlag::from_args(args).unwrap();
+        assert_eq!(flags.output, "file");
+    }
+
+    #[test]
+    fn test_short_name_using_space() {
+        let args = vec![
+            String::from("prog_name"),
+            String::from("-o"),
+            String::from("file"),
+        ];
+        let (flags, _rest) = ShortFlag::from_args(args).unwrap();
+        assert_eq!(flags.output, "file");
     }
 }

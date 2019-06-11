@@ -15,6 +15,7 @@ struct Attrs {
     description: Option<String>,
     placeholder: Option<String>,
     default_value: Option<syn::Lit>,
+    short_name: Option<syn::LitChar>,
 }
 
 enum FlagType {
@@ -44,6 +45,10 @@ impl Flag {
 
     fn default_value(&self) -> Option<&syn::Lit> {
         self.attrs.default_value.as_ref()
+    }
+
+    fn short_name(&self) -> Option<&syn::LitChar> {
+        self.attrs.short_name.as_ref()
     }
 }
 
@@ -323,7 +328,8 @@ fn extract_flag_attrs(meta: &syn::Meta) -> syn::Result<Attrs> {
                 } else if name_val.ident
                     == syn::Ident::new("short", Span::call_site())
                 {
-
+                    attrs.short_name =
+                        Some(parse_flag_attr_short_name(&name_val.lit)?);
                 } else {
                     return Err(syn::Error::new_spanned(
                         &name_val.ident,
@@ -368,12 +374,22 @@ fn parse_flag_attr_placeholder(literal: &syn::Lit) -> syn::Result<String> {
     }
 }
 
+fn parse_flag_attr_short_name(literal: &syn::Lit) -> syn::Result<syn::LitChar> {
+    if let syn::Lit::Char(val) = literal {
+        Ok(val.clone())
+    } else {
+        Err(syn::Error::new_spanned(
+            literal,
+            "Short name must be a char literal",
+        ))
+    }
+}
+
 fn generate_field_parsing(flag: &Flag) -> TokenStream {
     let name = &flag.name;
     let name_lit = name.to_string();
     let name_temp_var =
         syn::Ident::new(&format!("parsed_{}", name), name.span());
-    let match_case_str = format!("--{}", name);
     let ty = &flag.ty;
     let parse_expr = match &flag.flag_type {
         FlagType::Bool => {
@@ -418,8 +434,21 @@ fn generate_field_parsing(flag: &Flag) -> TokenStream {
         },
     };
 
+    let long_name = syn::LitStr::new(&format!("--{}", name), name.span());
+    let match_case = if let Some(short_name) = flag.short_name() {
+        let short_name = syn::LitStr::new(
+            &format!("-{}", &short_name.value().to_string()),
+            short_name.span(),
+        );
+        quote! {
+            #long_name | #short_name
+        }
+    } else {
+        long_name.into_token_stream()
+    };
+
     quote_spanned! {name.span()=>
-        #match_case_str => {
+        #match_case => {
             #name_temp_var = #parse_expr ;
         }
     }
