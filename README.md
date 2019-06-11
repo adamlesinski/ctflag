@@ -27,7 +27,7 @@ struct MyFlags {
     #[flag(desc = "An optional path to a Gmup", placeholder = "PATH")]
     gmup: Option<String>,
 
-    #[flag(desc = "Prints this help message")]
+    #[flag(short = 'h', desc = "Prints this help message")]
     help: bool,
 }
 
