@@ -549,15 +549,17 @@ mod tests {
         #[flag(desc = "Howdy", default = "foo", placeholder = "THING")]
         one: String,
 
-        #[flag(desc = "Boom", placeholder = "VROOM")]
+        #[flag(short = 't', desc = "Boom", placeholder = "VROOM")]
         two: Option<i32>,
     }
 
     #[test]
     fn test_description() {
         let desc: String = Description::description();
-        assert!(desc.contains("--one THING      Howdy (defaults to \"foo\")"));
-        assert!(desc.contains("--two [VROOM]    Boom"));
+        assert!(
+            desc.contains("    --one THING      Howdy (defaults to \"foo\")")
+        );
+        assert!(desc.contains("-t, --two [VROOM]    Boom"));
     }
 
     #[derive(Flags)]

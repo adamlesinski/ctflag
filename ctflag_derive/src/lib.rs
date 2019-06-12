@@ -456,6 +456,11 @@ fn generate_field_parsing(flag: &Flag) -> TokenStream {
 
 fn generate_flag_name_and_len(flag: &Flag) -> (String, usize) {
     let mut buf = StringBuilder::new();
+    if let Some(short_name) = flag.short_name() {
+        buf.append(&format!("-{}, ", short_name.value()));
+    } else {
+        buf.append("    ");
+    }
     buf.append(&format!("--{}", &flag.name));
     match &flag.flag_type {
         FlagType::Bool => {}
