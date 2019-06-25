@@ -3,6 +3,8 @@
 [Latest Version]: https://img.shields.io/crates/v/ctflag.svg
 [crates.io]: https://crates.io/crates/ctflag
 
+*Disclaimer*: This is not an official Google product.
+
 **Capture the Flag is a command-line flag parser Rust library.**
 
 ---

@@ -3,7 +3,7 @@ name = "ctflag_derive"
 version = "0.1.1"
 authors = ["Adam Lesinski <adamlesinski@gmail.com>"]
 edition = "2018"
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0"
 description = "The derive macro implementation for ctflag"
 repository = "https://github.com/adamlesinski/ctflag"
 
